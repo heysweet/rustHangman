@@ -1,140 +1,74 @@
-use std::{io::{stdin, stdout, Write}};
-use colored::Colorize;
+use std::io::{stdin, stdout, Write};
 
-const MAX_FAILURES: u8 = 6; // head, body, 2 arms, 2 legs
+mod game_state;
+use game_state::{GameState, HangmanError};
 
-enum RoundOutcome {
-    /// Discovered a new letter
-    Hit,
-    /// Found a letter not in the word
-    Miss,
-    /// Already guessed this letter
-    Duplicate,
-    /// Successfully found the word
-    Win,
-    /// Failed to find the word
-    Lose
-}
-
-/// Displays how much of the word has been correctly guessed so far.
-/// All missing letters will be represented with underscores.
-fn show_word(guesses: &Vec<char>, target_word: &str) -> (String, i32) {
-    let mut result = String::with_capacity(target_word.len() * 2);
-    let mut remaining_letters = 0;
-
-    // Technically O(n**2) but we're looking at 26 letters and the target word length so...
-    // Inefficieny is fine.
-    for char in target_word.chars() {
-        if guesses.contains(&char) {
-            result.push(char);
-        } else {
-            result.push('_');
-            remaining_letters += 1;
-        }
-        result.push(' ')
-    }
-    return (result, remaining_letters);
-}
+use crate::game_state::RoundOutcome;
 
 /// Informs the user what letters they've guessed so far,
 /// and then accepts user input and validates it.
-fn prompt_user_input(guesses: &Vec<char>, target_word: &str) -> String {
+fn prompt_user_input(game_state: &GameState) -> String {
     let mut user_input: String = String::new();
+    let guesses = game_state.get_all_guesses();
 
     println!("");
     if guesses.len() > 0 {
         println!("Guesses: {:?}", guesses);
     }
-    let (word, _) = show_word(&guesses, target_word);
-    println!("{}", word);
+    let obfuscated_word = game_state.get_obfuscated_word();
+    println!("{}", obfuscated_word);
     print!("Enter your guess: ");
     stdout().flush().unwrap();
 
-    stdin().read_line(&mut user_input).expect("Did not get user input");
+    stdin()
+        .read_line(&mut user_input)
+        .expect("Did not get user input");
 
-    return user_input;
+    user_input
 }
 
-fn validate_char(user_input: &String) -> Result<char, &str> {
-    // character followed by newline
-    if user_input.len() != 2 {
-        return Err("Expected 1 character");
-    }
-    // I think I'd want to unwrap with an error message?
-    // Shadowing!
-    let char = user_input.chars().next().unwrap();
-    let char: char = char.to_lowercase().next().unwrap();
-
-    if !char.is_alphabetic() {
-        return Err("Not a valid letter.");
-    }
-
-    return Ok(char);
-}
-
-/// Determines the outcome of the round.
-fn score(guesses: &mut Vec<char>, char: char, target_word: &str, num_wrong_remaining: &mut u8) -> RoundOutcome {
-    if guesses.contains(&char) {
-        return RoundOutcome::Duplicate;
-    }
-    
-    guesses.push(char);
-
-    if !target_word.contains(char) {
-        *num_wrong_remaining -= 1;
-        if *num_wrong_remaining <= 0 {
-            return RoundOutcome::Lose;
+fn parse_char(user_input: &String) -> Result<char, HangmanError> {
+    let mut lowercased_chars = user_input.to_lowercase();
+    lowercased_chars.pop();
+    match (
+        lowercased_chars.chars().nth(0),
+        lowercased_chars.chars().nth(1),
+    ) {
+        (Some(char), None) => {
+            if !char.is_alphabetic() {
+                Err(HangmanError::NonAlphabeticInput { user_input: char })
+            } else {
+                Ok(char)
+            }
         }
-        return RoundOutcome::Miss;
+        _ => Err(HangmanError::ExpectedOneCharacterInput {
+            user_input: lowercased_chars.clone(),
+        }),
     }
-    
-    let (_, num_blanks_remaining) = show_word(&guesses, target_word);
-    if num_blanks_remaining == 0 {
-        return RoundOutcome::Win;
-    }
-    return RoundOutcome::Hit;
 }
 
 fn play_hangman(target_word: &str) {
-    let mut num_wrong_remaining = MAX_FAILURES;
-
-    let mut guesses: Vec<char> = Vec::new();
+    let mut game_state: GameState = GameState::new(target_word.to_string());
 
     loop {
-        let user_input = prompt_user_input(&guesses, target_word);
+        println!("{}", game_state);
+        match game_state.round_outcome {
+            RoundOutcome::Win | RoundOutcome::Lose => {
+                break;
+            }
+            _ => (),
+        }
+        let user_input = prompt_user_input(&game_state);
 
-        let char = match validate_char(&user_input) {
-            Ok(c) => { c }
-            Err(message) => { 
-                println!("{}", message.red());
+        let char = match parse_char(&user_input) {
+            Ok(c) => c,
+            Err(error) => {
+                println!("{}", error);
                 continue;
             }
-            
         };
-        
-        let outcome = score(&mut guesses, char, target_word, &mut num_wrong_remaining);
 
-        match outcome {
-            RoundOutcome::Win => {
-                println!("{}", "You win!".green());
-                break;
-            },
-            RoundOutcome::Lose => {
-                println!("{}", format!("You lose! The word was '{}'.", target_word).red());
-                break;
-            },
-            RoundOutcome::Miss => {
-                println!("{}", format!("'{}' in not in the word. You have {} more incorrect guesses.", char, num_wrong_remaining).red());
-                continue;
-            },
-            RoundOutcome::Duplicate => {
-                println!("{}", format!("You've already guessed '{}'.", char).red());
-                continue;
-            },
-            RoundOutcome::Hit => {
-                continue;
-            },
-        }
+        game_state = game_state.guess(char);
     }
 }
 
