@@ -4,18 +4,25 @@ use colored::Colorize;
 const MAX_FAILURES: u8 = 6; // head, body, 2 arms, 2 legs
 
 enum RoundOutcome {
+    /// Discovered a new letter
     Hit,
+    /// Found a letter not in the word
     Miss,
+    /// Already guessed this letter
     Duplicate,
+    /// Successfully found the word
     Win,
+    /// Failed to find the word
     Lose
 }
 
+/// Displays how much of the word has been correctly guessed so far.
+/// All missing letters will be represented with underscores.
 fn show_word(guesses: &Vec<char>, target_word: &str) -> (String, i32) {
     let mut result = String::with_capacity(target_word.len() * 2);
     let mut remaining_letters = 0;
 
-    // Technical O(n**2) but we're looking at 26 letters and the target word length so...
+    // Technically O(n**2) but we're looking at 26 letters and the target word length so...
     // Inefficieny is fine.
     for char in target_word.chars() {
         if guesses.contains(&char) {
@@ -29,7 +36,11 @@ fn show_word(guesses: &Vec<char>, target_word: &str) -> (String, i32) {
     return (result, remaining_letters);
 }
 
-fn prompt(guesses: &Vec<char>, target_word: &str, user_input: &mut String) {
+/// Informs the user what letters they've guessed so far,
+/// and then accepts user input and validates it.
+fn prompt_user_input(guesses: &Vec<char>, target_word: &str) -> String {
+    let mut user_input: String = String::new();
+
     println!("");
     if guesses.len() > 0 {
         println!("Guesses: {:?}", guesses);
@@ -39,11 +50,12 @@ fn prompt(guesses: &Vec<char>, target_word: &str, user_input: &mut String) {
     print!("Enter your guess: ");
     stdout().flush().unwrap();
 
-    user_input.clear();
-    stdin().read_line(user_input).expect("Did not get user input");
+    stdin().read_line(&mut user_input).expect("Did not get user input");
+
+    return user_input;
 }
 
-fn validate_char(user_input: &mut String) -> Result<char, &str> {
+fn validate_char(user_input: &String) -> Result<char, &str> {
     // character followed by newline
     if user_input.len() != 2 {
         return Err("Expected 1 character");
@@ -60,6 +72,7 @@ fn validate_char(user_input: &mut String) -> Result<char, &str> {
     return Ok(char);
 }
 
+/// Determines the outcome of the round.
 fn score(guesses: &mut Vec<char>, char: char, target_word: &str, num_wrong_remaining: &mut u8) -> RoundOutcome {
     if guesses.contains(&char) {
         return RoundOutcome::Duplicate;
@@ -82,18 +95,15 @@ fn score(guesses: &mut Vec<char>, char: char, target_word: &str, num_wrong_remai
     return RoundOutcome::Hit;
 }
 
-fn main() {
-    let target_word = "bartender";
+fn play_hangman(target_word: &str) {
     let mut num_wrong_remaining = MAX_FAILURES;
 
     let mut guesses: Vec<char> = Vec::new();
 
-    let mut user_input: String = String::new();
-
     loop {
-        prompt(&guesses, target_word, &mut user_input);
+        let user_input = prompt_user_input(&guesses, target_word);
 
-        let char = match validate_char(&mut user_input) {
+        let char = match validate_char(&user_input) {
             Ok(c) => { c }
             Err(message) => { 
                 println!("{}", message.red());
@@ -126,4 +136,8 @@ fn main() {
             },
         }
     }
+}
+
+fn main() {
+    play_hangman("bartender");
 }
