@@ -2,6 +2,7 @@ use std::fmt;
 
 use colored::Colorize;
 
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 struct WordSoFar {
     pub guesses: Vec<char>,
     pub target_word: String,
@@ -56,6 +57,7 @@ impl fmt::Display for WordSoFar {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct GameState {
     pub round_outcome: RoundOutcome,
     word_so_far: WordSoFar,
